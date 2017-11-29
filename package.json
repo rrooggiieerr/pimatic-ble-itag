@@ -1,0 +1,25 @@
+{
+  "name": "pimatic-itag",
+  "description": "Gets Information from iTag as devices",
+  "author": "Rogier van Staveren <rogier@staveren.net>",
+  "main": "itag",
+  "files": [
+    "itag.coffee",
+    "README.md",
+    "itag-config-schema.coffee"
+  ],
+  "version": "0.0.1",
+  "homepage": "https://github.com/rrooggiieerr/pimatic-itag",
+  "configSchema": "itag-config-schema.coffee",
+  "dependencies": {
+    "itag": "^0.0.1"
+  },
+  "peerDependencies": {
+    "pimatic": "0.8.*",
+    "pimatic-ble": "0.8.*"
+  },
+  "engines": {
+    "node": ">0.8.x",
+    "npm": ">1.1.x"
+  }
+}
