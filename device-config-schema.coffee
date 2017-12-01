@@ -11,6 +11,6 @@ module.exports ={
       interval:
         description: "Interval between requests"
         type: "number"
-        default: 60000
+        default: 10000
   }
 }
