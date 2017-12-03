@@ -1,10 +1,17 @@
 pimatic-itag
 =================
 
-Pimatic Plugin that monitors availability of iTag ble devices
+Pimatic Plugin that monitors availability of iTag BLE devices.
+
+Unfortunately the iTag shuts down some minutes after disconnecting, so it can not be used as a beacon.
+However once connected the button and buzzer can be used.
 
 I'm working with this device:
-Settings in the BT firmware:
+On the device it says:
+Serial Number String: 20170414
+Hardware Revision String: FD-001-S-N V1.5
+
+In the firmware it says:
 Manufacturer Name String: 3231S FDQ
 Model Number String: BT 4.0
 Serial Number String: 20170307
@@ -12,9 +19,7 @@ Firmware Revision String: V3.9
 Hardware Revision String: FD-001-S-N V1.2
 Software Revison String: V8.0
 
-On the device:
-Serial Number String: 20170414
-Hardware Revision String: FD-001-S-N V1.5
+There seem to be multiple versions around with different hardware and firmware. Let me know which version you have and if it works.
 
 Configuration
 -------------
