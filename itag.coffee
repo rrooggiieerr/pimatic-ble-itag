@@ -11,9 +11,9 @@ module.exports = (env) ->
 
   class ITagPlugin extends env.plugins.Plugin
     init: (app, @framework, @config) =>
-      deviceConfigDef = require('./device-config-schema')
       @devices = []
 
+      deviceConfigDef = require('./device-config-schema')
       @framework.deviceManager.registerDeviceClass('ITagDevice', {
         configDef: deviceConfigDef.ITagDevice,
         createCallback: (config, lastState) =>
@@ -30,6 +30,7 @@ module.exports = (env) ->
 
           @ble.on('discover', (peripheral) =>
             @emit 'discover-' + peripheral.uuid, peripheral
+            # ToDo: Auto discover
           )
         else
           env.logger.warn 'itag could not find ble. It will not be able to discover devices'
@@ -38,8 +39,7 @@ module.exports = (env) ->
       env.logger.debug 'Adding device ' + uuid
       if @ble?
         @ble.addOnScan uuid
-      else
-        @devices.push uuid
+      @devices.push uuid
 
     removeFromScan: (uuid) =>
       env.logger.debug 'Removing device %s', uuid
@@ -50,10 +50,10 @@ module.exports = (env) ->
 
   class ITagDevice extends env.devices.PresenceSensor
     attributes:
-      battery:
-        description: 'State of battery'
-        type: 'number'
-        unit: '%'
+      #battery:
+      #  description: 'State of battery'
+      #  type: 'number'
+      #  unit: '%'
       button:
         description: 'State of button'
         type: 'boolean'
@@ -72,7 +72,7 @@ module.exports = (env) ->
 
     template: 'presence'
 
-    battery: 0.0
+    #battery: 0.0
     button: false
 
     constructor: (@config, plugin, lastState) ->
@@ -84,14 +84,15 @@ module.exports = (env) ->
       @peripheral = null
       @plugin = plugin
 
-      @_presence = lastState?.presence?.value or false
-
-      super()
+      @_presence = false
+      #@_presence = lastState?.presence?.value or false
 
       @plugin.on('discover-' + @uuid, (peripheral) =>
         env.logger.debug 'Device %s found, state: %s', @name, peripheral.state
         @connect peripheral
       )
+
+      super()
 
     connect: (peripheral) ->
       @peripheral = peripheral
@@ -103,7 +104,9 @@ module.exports = (env) ->
         # Immediately try to reconnect
         @_connect()
 
-      setInterval( =>
+
+      clearInterval @reconnectInterval
+      @reconnectInterval = setInterval( =>
         @_connect()
       , @interval)
 
@@ -142,17 +145,17 @@ module.exports = (env) ->
                 when 'high'
                   characteristic.write Buffer.from([0x01]), 2
             when '2a24'
-              @logValue characteristic, 'Model Number'
+              @logValue peripheral, characteristic, 'Model Number'
             when '2a25'
-              @logValue characteristic, 'Serial Number'
+              @logValue peripheral, characteristic, 'Serial Number'
             when '2a26'
-              @logValue characteristic, 'Firmware Revision'
+              @logValue peripheral, characteristic, 'Firmware Revision'
             when '2a27'
-              @logValue characteristic, 'Hardware Revision'
+              @logValue peripheral, characteristic, 'Hardware Revision'
             when '2a28'
-              @logValue characteristic, 'Software Revision'
+              @logValue peripheral, characteristic, 'Software Revision'
             when '2a29'
-              @logValue characteristic, 'Manufacturer Name'
+              @logValue peripheral, characteristic, 'Manufacturer Name'
             when 'ffe1'
               characteristic.on 'data', (data, isNotification) =>
                 env.logger.debug 'Button pressed'
@@ -165,7 +168,7 @@ module.exports = (env) ->
               #characteristic.subscribe (error) =>
               #  env.logger.debug 'Button notifier on'
             else
-              @logValue characteristic, 'Unknown'
+              @logValue peripheral, characteristic, 'Unknown'
 
       ###
       peripheral.discoverSomeServicesAndCharacteristics ['1802'], [], (error, services, characteristics) =>
@@ -198,13 +201,13 @@ module.exports = (env) ->
               #  env.logger.debug 'Button notifier on'
       ###
 
-    logValue: (characteristic, desc) ->
+    logValue: (peripheral, characteristic, desc) ->
       characteristic.read (error, data) =>
         if !error
           if data
-            env.logger.debug '(%s) %s: %s', characteristic.uuid, desc, data
+            env.logger.debug '(%s:%s) %s: %s', peripheral.uuid, characteristic.uuid, desc, data
         else
-          env.logger.debug '(%s) %s: error %s', characteristic.uuid, desc, error
+          env.logger.debug '(%%s:s) %s: error %s', peripheral.uuid, characteristic.uuid, desc, error
 
     buzzer: (level) ->
       if @peripheral.state == 'disconnected'
@@ -219,10 +222,11 @@ module.exports = (env) ->
     #      throw new Error('Invallid level, use no, mild or high')
 
     destroy: ->
+      clearInterval @reconnectInterval
       @plugin.removeFromScan @uuid
       super()
 
-    getBattery: -> Promise.resolve @battery
+    #getBattery: -> Promise.resolve @battery
     getButton: -> Promise.resolve @button
 
   return new ITagPlugin

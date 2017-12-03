@@ -8,15 +8,15 @@
     "README.md",
     "itag-config-schema.coffee"
   ],
-  "version": "0.0.1",
+  "version": "0.0.2",
   "homepage": "https://github.com/rrooggiieerr/pimatic-itag",
   "configSchema": "itag-config-schema.coffee",
   "dependencies": {
     "itag": "^0.0.1"
   },
   "peerDependencies": {
-    "pimatic": "0.8.*",
-    "pimatic-ble": "0.8.*"
+    "pimatic": ">=0.8.0 <1.0.0",
+    "pimatic-ble": ">=0.9.*"
   },
   "engines": {
     "node": ">0.8.x",

@@ -1,4 +1,4 @@
-module.exports ={
+module.exports = {
   title: "pimatic-itag device config schemas"
   ITagDevice: {
     title: "iTag config options"
