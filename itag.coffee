@@ -5,48 +5,67 @@ https://thejeshgn.com/2017/06/20/reverse-engineering-itag-bluetooth-low-energy-b
 
 module.exports = (env) ->
   Promise = env.require 'bluebird'
-  assert = env.require 'cassert'
   
   events = require 'events'
 
   class ITagPlugin extends env.plugins.Plugin
     init: (app, @framework, @config) =>
-      @devices = []
+      @devices = {}
 
       deviceConfigDef = require('./device-config-schema')
       @framework.deviceManager.registerDeviceClass('ITagDevice', {
         configDef: deviceConfigDef.ITagDevice,
         createCallback: (config, lastState) =>
-          @addOnScan config.uuid
-          new ITagDevice(config, @, lastState)
+          device = new ITagDevice(config, @, lastState)
+          @addToScan config.uuid, device
+          return device
       })
+
+      @framework.deviceManager.on 'discover', (eventData) =>
+          @framework.deviceManager.discoverMessage 'pimatic-itag', 'Scanning for iTags'
+
+          @ble.on 'discover-itag', (peripheral) =>
+            env.logger.debug 'Device %s found, state: %s', peripheral.uuid, peripheral.state
+            config = {
+              class: 'ITagDevice',
+              uuid: peripheral.uuid
+            }
+            @framework.deviceManager.discoveredDevice(
+              'pimatic-itag', 'iTag ' + peripheral.uuid, config
+            )
 
       @framework.on 'after init', =>
         @ble = @framework.pluginManager.getPlugin 'ble'
         if @ble?
-          @ble.registerName 'ITAG'
+          @ble.registerName 'ITAG', 'itag'
 
-          @ble.addOnScan device for device in @devices
-
-          @ble.on('discover', (peripheral) =>
-            @emit 'discover-' + peripheral.uuid, peripheral
-            # ToDo: Auto discover
-          )
+          for uuid, device of @devices
+            @ble.on 'discover-' + uuid, (peripheral) =>
+              device = @devices[peripheral.uuid]
+              env.logger.debug 'Device %s found, state: %s', device.name, peripheral.state
+              #@removeFromScan peripheral.uuid
+              device.connect peripheral
+            @ble.addToScan uuid, device
         else
           env.logger.warn 'itag could not find ble. It will not be able to discover devices'
 
-    addOnScan: (uuid) =>
-      env.logger.debug 'Adding device ' + uuid
+    addToScan: (uuid, device) =>
+      env.logger.debug 'Adding device %s', uuid
       if @ble?
-        @ble.addOnScan uuid
-      @devices.push uuid
+        @ble.on 'discover-' + uuid, (peripheral) =>
+          device = @devices[peripheral.uuid]
+          env.logger.debug 'Device %s found, state: %s', device.name, peripheral.state
+          #@removeFromScan peripheral.uuid
+          device.connect peripheral
+        @ble.addToScan uuid, device
+      @devices[uuid] = device
 
     removeFromScan: (uuid) =>
       env.logger.debug 'Removing device %s', uuid
       if @ble?
         @ble.removeFromScan uuid
-      if uuid in @devices
-        @devices.splice @devices.indexOf(uuid), 1
+      if @devices[uuid]
+        delete @devices[uuid]
 
   class ITagDevice extends env.devices.PresenceSensor
     attributes:
@@ -59,7 +78,7 @@ module.exports = (env) ->
         type: 'boolean'
         labels: ['on','off']
       presence:
-        description: "Presence of the iTag device"
+        description: 'Presence of the iTag device'
         type: 'boolean'
         labels: ['present', 'absent']
 
@@ -87,46 +106,46 @@ module.exports = (env) ->
       @_presence = false
       #@_presence = lastState?.presence?.value or false
 
-      @plugin.on('discover-' + @uuid, (peripheral) =>
-        env.logger.debug 'Device %s found, state: %s', @name, peripheral.state
-        @connect peripheral
-      )
-
       super()
 
     connect: (peripheral) ->
       @peripheral = peripheral
-      @plugin.removeFromScan @uuid
 
       @peripheral.on 'disconnect', (error) =>
         env.logger.debug 'Device %s disconnected', @name
         @_setPresence false
+
+        clearInterval @reconnectInterval
+        if @_destroyed then return
+        @reconnectInterval = setInterval( =>
+          @_connect()
+        , @interval)
         # Immediately try to reconnect
         @_connect()
 
-
-      clearInterval @reconnectInterval
       @reconnectInterval = setInterval( =>
         @_connect()
       , @interval)
-
       @_connect()
 
     _connect: ->
+      if @_destroyed then return
       if @peripheral.state == 'disconnected'
+        env.logger.debug 'Trying to connect to %s', @name
         @plugin.ble.stopScanning()
         @peripheral.connect (error) =>
           if !error
             env.logger.debug 'Device %s connected', @name
-            @plugin.ble.startScanning()
             @_setPresence true
             @readData @peripheral
+            clearInterval @reconnectInterval
           else
             env.logger.debug 'Device %s connection failed: %s', @name, error
             @_setPresence false
+          @plugin.ble.startScanning()
 
     readData: (peripheral) ->
-      env.logger.debug 'readData'
+      env.logger.debug 'Reading data from %s', @name
 
       #peripheral.discoverServices null, (error, services) =>
       #  env.logger.debug 'Services: %s', services
@@ -222,7 +241,14 @@ module.exports = (env) ->
     #      throw new Error('Invallid level, use no, mild or high')
 
     destroy: ->
-      clearInterval @reconnectInterval
+      env.logger.debug 'Destroy %s', @name
+      @_destroyed = true
+      @emit('destroy', @)
+      @removeAllListeners('destroy')
+      @removeAllListeners(attrName) for attrName of @attributes
+
+      if @peripheral && @peripheral.state == 'connected'
+        @peripheral.disconnect()
       @plugin.removeFromScan @uuid
       super()
 
