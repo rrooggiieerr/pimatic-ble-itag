@@ -13,7 +13,7 @@ module.exports = {
         type: "number"
         default: 10000
       linkLossAlert:
-        description: "Alert to make when link with iTag is lost: no, mild, high"
+        description: "Alert to make when link with iTag is lost: off, low, high"
         type: "string"
         default: "off"
   }

@@ -5,12 +5,15 @@ https://thejeshgn.com/2017/06/20/reverse-engineering-itag-bluetooth-low-energy-b
 
 module.exports = (env) ->
   Promise = env.require 'bluebird'
-  
-  events = require 'events'
+  assert = env.require 'cassert'
+  _ = require 'lodash' 
+  M = env.matcher
 
   class ITagPlugin extends env.plugins.Plugin
     init: (app, @framework, @config) =>
       @devices = {}
+
+      @framework.ruleManager.addActionProvider(new ITagBuzzerActionProvider(@framework))
 
       deviceConfigDef = require('./device-config-schema')
       @framework.deviceManager.registerDeviceClass('ITagDevice', {
@@ -91,8 +94,8 @@ module.exports = (env) ->
 
     template: 'presence'
 
-    #battery: 0.0
-    button: false
+    #_battery: 0.0
+    _button: false
 
     constructor: (@config, plugin, lastState) ->
       @id = @config.id
@@ -141,6 +144,8 @@ module.exports = (env) ->
             clearInterval @reconnectInterval
           else
             env.logger.debug 'Device %s connection failed: %s', @name, error
+            env.logger.debug 'Device state: %s', @peripheral.state
+            @peripheral.disconnect()
             @_setPresence false
           @plugin.ble.startScanning()
 
@@ -151,18 +156,21 @@ module.exports = (env) ->
       #  env.logger.debug 'Services: %s', services
       # {"uuid":"180a","name":"Device Information","type":"org.bluetooth.service.device_information","includedServiceUuids":null},{"uuid":"1802","name":"Immediate Alert","type":"org.bluetooth.service.immediate_alert","includedServiceUuids":null},{"uuid":"1803","name":"Link Loss","type":"org.bluetooth.service.link_loss","includedServiceUuids":null},{"uuid":"ffe0","name":null,"type":null,"includedServiceUuids":null}
         
-      peripheral.discoverSomeServicesAndCharacteristics ['180a', '0803', 'ffe0'], [], (error, services, characteristics) =>
+      peripheral.discoverSomeServicesAndCharacteristics ['180a', '1803', 'ffe0'], [], (error, services, characteristics) =>
         characteristics.forEach (characteristic) =>
           switch characteristic.uuid
             when '2a06'
               # Link Loss
-              switch @linkLossAlert
-                when 'no'
-                  characteristic.write Buffer.from([0x01]), 0
-                when 'mild'
-                  characteristic.write Buffer.from([0x01]), 1
-                when 'high'
-                  characteristic.write Buffer.from([0x01]), 2
+              # This does not yet seem to work, just put it off for now
+              env.logger.debug 'Setting Link Loss alert to 0x00'
+              characteristic.write Buffer.from([0x02]), 0x00
+              #switch @linkLossAlert
+              #  when 'off'
+              #    characteristic.write Buffer.from([0x01]), 0x00
+              #  when 'low'
+              #    characteristic.write Buffer.from([0x01]), 0x01
+              #  when 'high'
+              #    characteristic.write Buffer.from([0x01]), 0x02
             when '2a24'
               @logValue peripheral, characteristic, 'Model Number'
             when '2a25'
@@ -178,11 +186,11 @@ module.exports = (env) ->
             when 'ffe1'
               characteristic.on 'data', (data, isNotification) =>
                 env.logger.debug 'Button pressed'
-                @button = true
-                @emit 'button', @button
+                @_button = true
+                @emit 'button', @_button
                 setTimeout =>
-                  @button = false
-                  @emit 'button', @button
+                  @_button = false
+                  @emit 'button', @_button
                 , 500
               #characteristic.subscribe (error) =>
               #  env.logger.debug 'Button notifier on'
@@ -203,21 +211,6 @@ module.exports = (env) ->
             when '2a06'
               # Out of reach signal
               characteristic.write Buffer.from([0x01]), 0
-
-      peripheral.discoverSomeServicesAndCharacteristics ['ffe0'], [], (error, services, characteristics) =>
-        characteristics.forEach (characteristic) =>
-          switch characteristic.uuid
-            when 'ffe1'
-              characteristic.on 'data', (data, isNotification) =>
-                env.logger.debug 'Button pressed'
-                @button = true
-                @emit 'button', @button
-                setTimeout =>
-                  @button = false
-                  @emit 'button', @button
-                , 500
-              #characteristic.subscribe (error) =>
-              #  env.logger.debug 'Button notifier on'
       ###
 
     logValue: (peripheral, characteristic, desc) ->
@@ -229,16 +222,25 @@ module.exports = (env) ->
           env.logger.debug '(%%s:s) %s: error %s', peripheral.uuid, characteristic.uuid, desc, error
 
     buzzer: (level) ->
-      if @peripheral.state == 'disconnected'
+      if !@peripheral || @peripheral.state == 'disconnected'
         throw new Error('Device disconnected')
         return
-
-    #  switch level
-    #    when 'no'
-    #    when 'mild'
-    #    when 'high'
-    #    else
-    #      throw new Error('Invallid level, use no, mild or high')
+      env.logger.debug 'Buzzer %s', level
+      @peripheral.discoverSomeServicesAndCharacteristics ['1802'], ['2a06'], (error, services, characteristics) =>
+        characteristics.forEach (characteristic) =>
+          env.logger.debug characteristic.uuid
+          switch characteristic.uuid
+            when '2a06'
+              @logValue @peripheral, characteristic, 'Alert Level'
+              # This does not yet seem to work, just put it off for now
+              characteristic.write Buffer.from([0x01]), false
+              #switch level
+              #  when 'off'
+              #    characteristic.write Buffer.from([0x01]), 0x00
+              #  when 'low'
+              #    characteristic.write Buffer.from([0x01]), 0x01
+              #  when 'high'
+              #    characteristic.write Buffer.from([0x01]), 0x02
 
     destroy: ->
       env.logger.debug 'Destroy %s', @name
@@ -252,7 +254,68 @@ module.exports = (env) ->
       @plugin.removeFromScan @uuid
       super()
 
-    #getBattery: -> Promise.resolve @battery
-    getButton: -> Promise.resolve @button
+    #getBattery: -> Promise.resolve @_battery
+    getButton: -> Promise.resolve @_button
+
+  class ITagBuzzerActionProvider extends env.actions.ActionProvider
+    constructor: (@framework, @plugin) ->
+
+    executeAction: (simulate) =>
+
+    parseAction: (input, context) =>
+
+      commandTokens = null
+      fullMatch = no
+
+      setCommand = (m, tokens) => commandTokens = tokens
+      onEnd = => fullMatch = yes
+
+      buzzerDevices = _(@framework.deviceManager.devices).values().filter(
+        (device) => device.hasAction('buzzer')
+      ).value()
+
+      device = null
+      state = null
+      match = null
+
+      m = M(input, context)
+        .match(['turn ', 'switch '])
+        .matchDevice(buzzerDevices, (m, _device) ->
+          m.match(' buzzer ')
+            .match(['off', 'low', 'high'], (m, _state) ->
+              device = _device
+              state = _state
+              match =  m.getFullMatch()
+            )
+        )
+
+      if match?
+        assert device?
+        assert state in ['off', 'low', 'high']
+        assert typeof match is "string"
+        return {
+          token: match
+          nextInput: input.substring match.length
+          actionHandler: new ITagBuzzerActionHandler device, state
+        }
+      return null
+      
+  class ITagBuzzerActionHandler extends env.actions.ActionHandler
+    constructor: (@device, @state) ->
+
+    setup: ->
+      @dependOnDevice(@device)
+      super()
+
+    _doExecuteAction: (simulate, state) =>
+      return (
+        if simulate
+          Promise.resolve __('would switch %s buzzer %s', @device.name, @state)
+        else
+          @device.buzzer @state
+          Promise.resolve __('switched %s buzzer %s', @device.name, @state)
+      )
+
+    executeAction: (simulate) => @_doExecuteAction simulate, @state
 
   return new ITagPlugin
