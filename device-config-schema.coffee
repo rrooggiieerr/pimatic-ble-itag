@@ -1,5 +1,5 @@
 module.exports = {
-  title: "pimatic-itag device config schemas"
+  title: "pimatic-ble-itag device config schemas"
   ITagDevice: {
     title: "iTag config options"
     type: "object"

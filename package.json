@@ -1,16 +1,17 @@
 {
-  "name": "pimatic-itag",
-  "description": "Gets Information from iTag as devices",
+  "name": "pimatic-ble-itag",
+  "description": "Gets Information from iTag BLE devices",
   "author": "Rogier van Staveren <rogier@staveren.net>",
   "main": "itag",
   "files": [
     "itag.coffee",
     "README.md",
-    "itag-config-schema.coffee"
+    "itag-config-schema.coffee",
+    "device-config-schema.coffee"
   ],
   "license": "GPL-2.0",
-  "version": "0.0.4",
-  "homepage": "https://github.com/rrooggiieerr/pimatic-itag",
+  "version": "0.0.5",
+  "homepage": "https://github.com/rrooggiieerr/pimatic-ble-itag",
   "configSchema": "itag-config-schema.coffee",
   "peerDependencies": {
     "pimatic": ">=0.8.0 <1.0.0",
@@ -20,5 +21,15 @@
   "engines": {
     "node": ">0.8.x",
     "npm": ">1.1.x"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rrooggiieerr/pimatic-ble-itag.git"
+  },
+  "keywords": [
+    "pimatic"
+  ],
+  "bugs": {
+    "url": "https://github.com/rrooggiieerr/pimatic-ble-itag/issues"
   }
 }

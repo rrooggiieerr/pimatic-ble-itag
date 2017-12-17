@@ -1,5 +1,5 @@
-pimatic-itag
-=================
+pimatic-ble-itag
+================
 
 Pimatic Plugin that monitors availability of iTag BLE devices.
 
@@ -32,7 +32,7 @@ If you don't have the pimatic-ble plugin add it to the plugin section:
 Then add the plugin to the plugin section:
 
     {
-      "plugin": "itag"
+      "plugin": "ble-itag"
     },
 
 Then add the device entry for your device into the devices section:
@@ -45,5 +45,4 @@ Then add the device entry for your device into the devices section:
       "interval": 60000
     }
 
-Then you can add the items into the mobile frontend
-# pimatic-itag
+Then you can add the items into the mobile frontend.

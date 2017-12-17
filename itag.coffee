@@ -25,7 +25,7 @@ module.exports = (env) ->
       })
 
       @framework.deviceManager.on 'discover', (eventData) =>
-          @framework.deviceManager.discoverMessage 'pimatic-itag', 'Scanning for iTags'
+          @framework.deviceManager.discoverMessage 'pimatic-ble-itag', 'Scanning for iTags'
 
           @ble.on 'discover-itag', (peripheral) =>
             env.logger.debug 'Device %s found, state: %s', peripheral.uuid, peripheral.state
@@ -34,7 +34,7 @@ module.exports = (env) ->
               uuid: peripheral.uuid
             }
             @framework.deviceManager.discoveredDevice(
-              'pimatic-itag', 'iTag ' + peripheral.uuid, config
+              'pimatic-ble-itag', 'iTag ' + peripheral.uuid, config
             )
 
       @framework.on 'after init', =>
@@ -263,13 +263,6 @@ module.exports = (env) ->
     executeAction: (simulate) =>
 
     parseAction: (input, context) =>
-
-      commandTokens = null
-      fullMatch = no
-
-      setCommand = (m, tokens) => commandTokens = tokens
-      onEnd = => fullMatch = yes
-
       buzzerDevices = _(@framework.deviceManager.devices).values().filter(
         (device) => device.hasAction('buzzer')
       ).value()
