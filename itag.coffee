@@ -70,7 +70,7 @@ module.exports = (env) ->
       if @devices[uuid]
         delete @devices[uuid]
 
-  class ITagDevice extends env.devices.PresenceSensor
+  class ITagDevice extends env.devices.BLEDevice
     attributes:
       #battery:
       #  description: 'State of battery'
@@ -97,57 +97,15 @@ module.exports = (env) ->
     #_battery: 0.0
     _button: false
 
-    constructor: (@config, plugin, lastState) ->
-      @id = @config.id
-      @name = @config.name
-      @interval = @config.interval
-      @uuid = @config.uuid
+    constructor: (@config, @plugin, lastState) ->
       @linkLossAlert = @config.linkLossAlert
-      @peripheral = null
-      @plugin = plugin
 
-      @_presence = false
-      #@_presence = lastState?.presence?.value or false
+      super(@config, @plugin, lastState)
 
-      super()
-
-    connect: (peripheral) ->
-      @peripheral = peripheral
-
-      @peripheral.on 'disconnect', (error) =>
-        env.logger.debug 'Device %s disconnected', @name
-        @_setPresence false
-
-        clearInterval @reconnectInterval
-        if @_destroyed then return
-        @reconnectInterval = setInterval( =>
-          @_connect()
-        , @interval)
-        # Immediately try to reconnect
-        @_connect()
-
-      @reconnectInterval = setInterval( =>
-        @_connect()
-      , @interval)
+    onDisconnect: () ->
+      @_setPresence false
+      # Immediately try to reconnect
       @_connect()
-
-    _connect: ->
-      if @_destroyed then return
-      if @peripheral.state == 'disconnected'
-        env.logger.debug 'Trying to connect to %s', @name
-        @plugin.ble.stopScanning()
-        @peripheral.connect (error) =>
-          if !error
-            env.logger.debug 'Device %s connected', @name
-            @_setPresence true
-            @readData @peripheral
-            clearInterval @reconnectInterval
-          else
-            env.logger.debug 'Device %s connection failed: %s', @name, error
-            env.logger.debug 'Device state: %s', @peripheral.state
-            @peripheral.disconnect()
-            @_setPresence false
-          @plugin.ble.startScanning()
 
     readData: (peripheral) ->
       env.logger.debug 'Reading data from %s', @name
@@ -159,11 +117,11 @@ module.exports = (env) ->
       peripheral.discoverSomeServicesAndCharacteristics ['180a', '1803', 'ffe0'], [], (error, services, characteristics) =>
         characteristics.forEach (characteristic) =>
           switch characteristic.uuid
-            when '2a06'
+            #when '2a06'
               # Link Loss
               # This does not yet seem to work, just put it off for now
-              env.logger.debug 'Setting Link Loss alert to 0x00'
-              characteristic.write Buffer.from([0x02]), 0x00
+              #env.logger.debug 'Setting Link Loss alert to 0x00'
+              #characteristic.write Buffer.from([0x02]), 0x00
               #switch @linkLossAlert
               #  when 'off'
               #    characteristic.write Buffer.from([0x01]), 0x00
@@ -196,22 +154,6 @@ module.exports = (env) ->
               #  env.logger.debug 'Button notifier on'
             else
               @logValue peripheral, characteristic, 'Unknown'
-
-      ###
-      peripheral.discoverSomeServicesAndCharacteristics ['1802'], [], (error, services, characteristics) =>
-        characteristics.forEach (characteristic) =>
-          switch characteristic.uuid
-            when '2a06'
-              # Alarm signal
-              characteristic.write Buffer.from([0x01]), 0
-
-      peripheral.discoverSomeServicesAndCharacteristics ['1803'], [], (error, services, characteristics) =>
-        characteristics.forEach (characteristic) =>
-          switch characteristic.uuid
-            when '2a06'
-              # Out of reach signal
-              characteristic.write Buffer.from([0x01]), 0
-      ###
 
     logValue: (peripheral, characteristic, desc) ->
       characteristic.read (error, data) =>

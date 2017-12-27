@@ -46,3 +46,5 @@ Then add the device entry for your device into the devices section:
     }
 
 Then you can add the items into the mobile frontend.
+
+You can also use Discover Devices on the Pimatic Devices screen and your iTag will be automaticly discovered.
